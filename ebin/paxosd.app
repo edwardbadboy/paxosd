@@ -3,7 +3,13 @@
 {application, paxosd,
  [{description, "paxos lease daemon"},
   {vsn, "0.1.0"},
-  {modules, [pdApp, pdServer, pdServerSup, paxosd]},
+  {modules, [
+      paxosd,
+      pdApp,
+      pdProposer,
+      pdServer,
+      pdServerSup,
+      pdUtils]},
   {registered, [pdServerSup]},
   {mod, {pdApp, []}},
   {applications, [kernel, stdlib]}]}.
