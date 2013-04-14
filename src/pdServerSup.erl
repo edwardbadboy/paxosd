@@ -16,5 +16,8 @@ init([]) ->
     Server = {pdServer,
               {pdServer, start_link, []},
               permanent, 2000, worker, [pdServer]},
+    LeaseServer = {pdLeaseServer,
+                   {pdLeaseServer, start_link, []},
+                   permanent, 2000, worker, [pdLeaseServer]},
     RestartStrategy = {one_for_one, 0, 1},
-    {ok, {RestartStrategy, [Server]}}.
+    {ok, {RestartStrategy, [Server, LeaseServer]}}.

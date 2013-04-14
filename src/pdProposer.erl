@@ -11,6 +11,8 @@
 -record(session, {ballotid, proposerStore, proposal, memberCount=0,
                   proposeTimeoutRef}).
 
+% TODO: allow register application custom determineInp callback
+
 
 proposer(BallotID, ProposerStore, MemberCount, OurProposal) ->
     process_flag(trap_exit, true),
@@ -25,7 +27,7 @@ fire(Proposer) -> Proposer!{startSession}.
 sessionStart(Session) ->
     {A1, A2, A3} = os:timestamp(),
     random:seed(A1, A2, A3),
-    TRef = pdUtils:timout(?PROPOSETIMEOUT),
+    TRef = pdUtils:timeout(?PROPOSETIMEOUT),
     receive
         {startSession} ->
             sessionLoop(Session#session{proposeTimeoutRef=TRef})

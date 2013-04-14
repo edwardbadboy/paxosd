@@ -4,12 +4,12 @@
 % API
 -export([start_link/0, stop/1,
          add/2, minus/2, getValue/1, raise/1,
-         joinCluster/1, makeBallot/2, propose/3, acceptorState/2, leanerInp/2,
-         learn/2,
+         joinCluster/1, makeBallot/2, propose/3, acceptorState/2, learnerInp/2,
+         learn/2, invalidateInp/2,
          castPrepare/2, castAccept/2, castCommit/1]).
 
 % module level inter-node calls
--export([prepare/2, accept/2, commit/1, leanerInp/1]).
+-export([prepare/2, accept/2, commit/1, learnerInp/1]).
 
 % utilities
 -export([getPdServer/0]).
@@ -26,18 +26,16 @@
 
 % TODO: keep the ets table when pdServer is restarted
 % TODO: add recover mechanism
-% TODO: add learner logic: learn/?
 
-% module local util functions
 getPdServerAt(Node) ->
-    [{pdServer, P, _, _}] = supervisor:which_children({pdServerSup, Node}),
-    P.
+    pdUtils:getServerAt(pdServer, Node).
 
 
 getPdServer() ->
     getPdServerAt(node()).
 
 
+% module local util functions
 clusterNodes() ->
     lists:subtract([node()|nodes()], ?JOKERS).
 
@@ -94,12 +92,16 @@ acceptorState(Server, ID) ->
     gen_server:call(Server, {acceptorState, ID}).
 
 
-leanerInp(Server, ID) ->
-    gen_server:call(Server, {leanerInp, ID}).
+learnerInp(Server, ID) ->
+    gen_server:call(Server, {learnerInp, ID}).
 
 
 learn(Server, ID) ->
     gen_server:call(Server, {learn, ID}, ?LEARNTIMEOUT).
+
+
+invalidateInp(Server, ID) ->
+    gen_server:call(Server, {invalidateInp, ID}).
 
 
 castPrepare(From, Msg) ->
@@ -127,8 +129,8 @@ commit(Msg) ->
     gen_server:call(getPdServer(), {commit, Msg}).
 
 
-leanerInp(ID) ->
-    ?MODULE:leanerInp(getPdServer(), ID).
+learnerInp(ID) ->
+    ?MODULE:learnerInp(getPdServer(), ID).
 
 
 init([]) ->
@@ -195,14 +197,20 @@ handle_call({propose, ID, OurProposal}, From,
     {noreply, State};
 
 handle_call({learn, ID}, From, State=#state{learnerStore=LStore}) ->
-    spawn_link(?MODULE, learnRemoteValue, {From, ID, LStore}),
+    spawn_link(?MODULE, learnRemoteValue, [From, ID, LStore]),
     {noreply, State};
+
+handle_call({invalidateInp, ID}, _From, State=#state{acceptorStore=AStore,
+                                                     learnerStore=LStore}) ->
+    ets:update_element(AStore, ID, {#acceptorState.inp, undefined}),
+    ets:update_element(LStore, ID, {#learnerState.inp, undefined}),
+    {reply, ok, State};
 
 handle_call({acceptorState, ID}, _From, State=#state{acceptorStore=AStore}) ->
     [AccState] = pdUtils:etsLookup(AStore, ID, #acceptorState{ballotid=ID}),
     {reply, AccState, State};
 
-handle_call({leanerInp, ID}, _From, State=#state{learnerStore=LStore}) ->
+handle_call({learnerInp, ID}, _From, State=#state{learnerStore=LStore}) ->
     [#learnerState{inp=Inp}] = pdUtils:etsLookup(LStore, ID, #learnerState{ballotid=ID}),
     {reply, Inp, State};
 
@@ -321,7 +329,7 @@ code_change(_OldVer, State, _Extra) ->
 
 startProposer(BallotID, PStore, PidStore) ->
     case ets:lookup(PStore, BallotID) of
-        [P = #proposerState{reqQueue=Q1}] ->
+        [#proposerState{reqQueue=Q1}] ->
             case queue:peek(Q1) of
                 {value, {_From, OurProposal}} ->
                     % TODO: set member count in conf file
@@ -339,10 +347,10 @@ startProposer(BallotID, PStore, PidStore) ->
 
 
 learnRemoteValue(ReplyTo, BallotID, LStore) ->
-    case lists:substract(clusterNodes(), [node()]) of
+    case lists:subtract(clusterNodes(), [node()]) of
         [] -> gen_server:reply(ReplyTo, {error, no_nodes});
         [N|_] ->
-            case rpc:call(N, pdServer, leanerInp, [BallotID], ?RPCTIMEOUT) of
+            case rpc:call(N, pdServer, learnerInp, [BallotID], ?RPCTIMEOUT) of
                 {badrpc, Reason} ->
                     gen_server:reply(ReplyTo, {error, {badrpc, Reason}});
                 undefined ->

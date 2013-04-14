@@ -6,6 +6,7 @@
   {modules, [
       paxosd,
       pdApp,
+      pdLeaseServer,
       pdProposer,
       pdServer,
       pdServerSup,

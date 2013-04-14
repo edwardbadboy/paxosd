@@ -1,6 +1,7 @@
 -module(pdUtils).
 -export([nfoldl/3, nfoldlTest/0, incBalNum/1, incBalNumTo/1,
-         etsInitDefault/3, etsLookup/3, timeout/1, isTimeout/1, flushMsg/0]).
+         etsInitDefault/3, etsLookup/3, timeout/1, isTimeout/1, flushMsg/0,
+         getServerAt/2]).
 -include("ballotState.hrl").
 
 
@@ -61,3 +62,10 @@ flushMsg() ->
     after 0 ->
         ok
     end.
+
+
+getServerAt(Server, Node) ->
+    {Server, P, _, _} =
+        lists:keyfind(Server, 1,
+                      supervisor:which_children({pdServerSup, Node})),
+    P.

@@ -1,3 +1,5 @@
+% TODO: Allow application custom field in balNum
+% the custom field is the second field
 % for mbal and bal number
 -record(balNum, {n=0, nodeName=node()}).
 
