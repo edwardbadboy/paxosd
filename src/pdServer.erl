@@ -4,11 +4,12 @@
 % API
 -export([start_link/0, stop/1,
          add/2, minus/2, getValue/1, raise/1,
-         joinCluster/1, makeBallot/2, propose/3, acceptorState/2,
+         joinCluster/1, makeBallot/2, propose/3, acceptorState/2, leanerInp/2,
+         learn/2,
          castPrepare/2, castAccept/2, castCommit/1]).
 
 % module level inter-node calls
--export([prepare/2, accept/2, commit/1]).
+-export([prepare/2, accept/2, commit/1, leanerInp/1]).
 
 % utilities
 -export([getPdServer/0]).
@@ -17,10 +18,11 @@
 -export([init/1, handle_call/3, handle_cast/2, handle_info/2, terminate/2, 
          code_change/3]).
 
+% self callbacks
+-export([learnRemoteValue/3]).
+
 -record(state, {value=0, acceptorStore, proposerStore, proposerIDStore, learnerStore}).
 -include("ballotState.hrl").
-
--define(JOINTIMEOUT, 20000).
 
 % TODO: keep the ets table when pdServer is restarted
 % TODO: add recover mechanism
@@ -85,11 +87,19 @@ makeBallot(Server, ID) ->
 
 
 propose(Server, ID, OurProposal) ->
-    gen_server:call(Server, {propose, ID, OurProposal}, infinity).
+    gen_server:call(Server, {propose, ID, OurProposal}, ?PROPOSETIMEOUT).
 
 
 acceptorState(Server, ID) ->
     gen_server:call(Server, {acceptorState, ID}).
+
+
+leanerInp(Server, ID) ->
+    gen_server:call(Server, {leanerInp, ID}).
+
+
+learn(Server, ID) ->
+    gen_server:call(Server, {learn, ID}, ?LEARNTIMEOUT).
 
 
 castPrepare(From, Msg) ->
@@ -115,6 +125,10 @@ accept(From, Msg) ->
 
 commit(Msg) ->
     gen_server:call(getPdServer(), {commit, Msg}).
+
+
+leanerInp(ID) ->
+    ?MODULE:leanerInp(getPdServer(), ID).
 
 
 init([]) ->
@@ -180,9 +194,17 @@ handle_call({propose, ID, OurProposal}, From,
     end,
     {noreply, State};
 
+handle_call({learn, ID}, From, State=#state{learnerStore=LStore}) ->
+    spawn_link(?MODULE, learnRemoteValue, {From, ID, LStore}),
+    {noreply, State};
+
 handle_call({acceptorState, ID}, _From, State=#state{acceptorStore=AStore}) ->
     [AccState] = pdUtils:etsLookup(AStore, ID, #acceptorState{ballotid=ID}),
     {reply, AccState, State};
+
+handle_call({leanerInp, ID}, _From, State=#state{learnerStore=LStore}) ->
+    [#learnerState{inp=Inp}] = pdUtils:etsLookup(LStore, ID, #learnerState{ballotid=ID}),
+    {reply, Inp, State};
 
 handle_call({prepare, ReplyTo,
              _Msg=#prepare{ballotid=BallotID, msgID=MsgID, mbal=MBal}},
@@ -314,3 +336,28 @@ startProposer(BallotID, PStore, PidStore) ->
         _ -> ok
     end,
     ok.
+
+
+learnRemoteValue(ReplyTo, BallotID, LStore) ->
+    case lists:substract(clusterNodes(), [node()]) of
+        [] -> gen_server:reply(ReplyTo, {error, no_nodes});
+        [N|_] ->
+            case rpc:call(N, pdServer, leanerInp, [BallotID], ?RPCTIMEOUT) of
+                {badrpc, Reason} ->
+                    gen_server:reply(ReplyTo, {error, {badrpc, Reason}});
+                undefined ->
+                    case paxosd:propose(BallotID, undefined) of
+                        ok ->
+                            case ets:lookup(LStore, BallotID) of
+                                [#learnerState{inp=Inp}] ->
+                                    gen_server:reply(ReplyTo, {ok, Inp});
+                                _ ->
+                                    gen_server:reply(ReplyTo, {error, propose_failed})
+                            end;
+                        R -> gen_server:reply(ReplyTo, {error, R})
+                    end;
+                Inp ->
+                    ets:update_element(LStore, BallotID, {#learnerState.inp, Inp}),
+                    gen_server:reply(ReplyTo, {ok, Inp})
+            end
+    end.

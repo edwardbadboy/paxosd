@@ -8,12 +8,8 @@
 
 -include("ballotState.hrl").
 
--record(session, {ballotid=undefined, proposerStore=undefined, proposal=undefined,
-                  memberCount=0}).
-
--define(CALMTIME, 3000).
--define(COLLECTTIMEOUT, 20000).
--define(WAITSTART, 5000).
+-record(session, {ballotid, proposerStore, proposal, memberCount=0,
+                  proposeTimeoutRef}).
 
 
 proposer(BallotID, ProposerStore, MemberCount, OurProposal) ->
@@ -29,11 +25,27 @@ fire(Proposer) -> Proposer!{startSession}.
 sessionStart(Session) ->
     {A1, A2, A3} = os:timestamp(),
     random:seed(A1, A2, A3),
+    TRef = pdUtils:timout(?PROPOSETIMEOUT),
     receive
         {startSession} ->
-            sessionLoop(Session)
+            sessionLoop(Session#session{proposeTimeoutRef=TRef})
     after ?WAITSTART ->
         error
+    end.
+
+
+calmDown() ->
+    timer:sleep(erlang:round(?CALMTIME * random:uniform())),
+    ok.
+
+
+nextRound(Session=#session{proposeTimeoutRef=TRef}) ->
+    case pdUtils:isTimeout(TRef) of
+        true ->
+            ok;
+        _ ->
+            calmDown(),
+            sessionLoop(Session)
     end.
 
 
@@ -54,13 +66,11 @@ sessionLoop(Session=#session{ballotid=BallotID, proposerStore=Store,
                     ok;
                 _ ->
                     io:format('accept fail~n'),
-                    timer:sleep(erlang:round(?CALMTIME * random:uniform())),
-                    sessionLoop(Session)
+                    nextRound(Session)
             end;
         _ ->
             io:format('prepare fail~n'),
-            timer:sleep(erlang:round(?CALMTIME * random:uniform())),
-            sessionLoop(Session)
+            nextRound(Session)
     end.
 
 
@@ -90,7 +100,7 @@ runStage(_Session=#session{ballotid=BallotID,
     [ProposerState] = ets:lookup(Store, BallotID),
     MBal = ProposerState#proposerState.mbal,
     Inp = ProposerState#proposerState.inp,
-    flushMsg(),
+    pdUtils:flushMsg(),
     case Stage of
         prepare -> pdServer:castPrepare(self(),
                                   #prepare{ballotid=BallotID,
@@ -147,11 +157,3 @@ collectRespAcc(Stage, MemberCount, MsgID, TimerRef, Response) ->
 
 
 isMajority(R, MemberCount) -> length(R) * 2 > MemberCount.
-
-
-flushMsg() ->
-    receive
-        _ -> flushMsg()
-    after 0 ->
-        ok
-    end.

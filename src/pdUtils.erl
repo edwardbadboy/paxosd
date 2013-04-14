@@ -1,6 +1,6 @@
 -module(pdUtils).
 -export([nfoldl/3, nfoldlTest/0, incBalNum/1, incBalNumTo/1,
-         etsInitDefault/3, etsLookup/3]).
+         etsInitDefault/3, etsLookup/3, timeout/1, isTimeout/1, flushMsg/0]).
 -include("ballotState.hrl").
 
 
@@ -38,4 +38,26 @@ etsLookup(Table, Key, DefaultV) ->
     case ets:lookup(Table, Key) of
         [] -> ets:insert(Table, DefaultV), [DefaultV];
         R = [_|_] -> R
+    end.
+
+
+timeout(Timeout) ->
+    TRef = make_ref(),
+    timer:send_after(Timeout, {pdTimeout, TRef}),
+    TRef.
+
+
+isTimeout(TRef) ->
+    receive
+        {pdTimeout, TRef} -> true
+    after 0 -> false
+    end.
+
+
+flushMsg() ->
+    receive
+        Msg when Msg =/= pdTimeout ->
+            flushMsg()
+    after 0 ->
+        ok
     end.

@@ -31,3 +31,12 @@
 
 % TODO start jokers and link them together automatically
 -define(JOKERS, ['joker1@zhshzhouf17', 'joker2@zhshzhouf17']).
+
+-define(JOINTIMEOUT, 20000).
+-define(RPCTIMEOUT, 5000).
+-define(PROPOSETIMEOUT, 60000).
+-define(LEARNTIMEOUT, ?RPCTIMEOUT + ?PROPOSETIMEOUT).
+
+-define(CALMTIME, 3000).
+-define(COLLECTTIMEOUT, 20000).
+-define(WAITSTART, 5000).
