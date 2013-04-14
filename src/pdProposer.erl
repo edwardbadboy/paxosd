@@ -39,7 +39,6 @@ sessionStart(Session) ->
 
 sessionLoop(Session=#session{ballotid=BallotID, proposerStore=Store,
                              proposal=OurProposal}) ->
-    timer:sleep(erlang:round(?CALMTIME * random:uniform())),
     [ProposerState] = ets:lookup(Store, BallotID),
     MBal =  ProposerState#proposerState.mbal,
     ets:update_element(Store, BallotID, {#proposerState.mbal, pdUtils:incBalNum(MBal)}),
@@ -55,10 +54,12 @@ sessionLoop(Session=#session{ballotid=BallotID, proposerStore=Store,
                     ok;
                 _ ->
                     io:format('accept fail~n'),
+                    timer:sleep(erlang:round(?CALMTIME * random:uniform())),
                     sessionLoop(Session)
             end;
         _ ->
             io:format('prepare fail~n'),
+            timer:sleep(erlang:round(?CALMTIME * random:uniform())),
             sessionLoop(Session)
     end.
 

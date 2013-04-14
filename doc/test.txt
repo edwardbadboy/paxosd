@@ -1,0 +1,9 @@
+application:start(paxosd).
+paxosd:joinCluster().
+
+paxosd:makeBallot(10).
+paxosd:propose(10, abc).
+
+paxosd:ballotInp(10).
+
+application:stop(paxosd).

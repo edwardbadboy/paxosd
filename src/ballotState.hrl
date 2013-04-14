@@ -9,7 +9,7 @@
 % mbal: next ballot number to send
 % inp: value to be proposed
 % proposer: pdProposer process id
--record(proposerState, {ballotid=0, mbal=#balNum{}, inp, proposer}).
+-record(proposerState, {ballotid=0, mbal=#balNum{}, inp, proposer, reqQueue=queue:new()}).
 
 % inp: value learned
 -record(learnerState, {ballotid=0, inp}).

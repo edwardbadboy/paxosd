@@ -85,7 +85,7 @@ makeBallot(Server, ID) ->
 
 
 propose(Server, ID, OurProposal) ->
-    gen_server:call(Server, {propose, ID, OurProposal}).
+    gen_server:call(Server, {propose, ID, OurProposal}, infinity).
 
 
 acceptorState(Server, ID) ->
@@ -166,20 +166,19 @@ handle_call({makeBallot, ID}, _From, State) ->
     ballotInitDefault(ID, State),
     {reply, ok, State};
 
-handle_call({propose, ID, OurProposal}, _From,
+handle_call({propose, ID, OurProposal}, From,
             State=#state{proposerStore=PStore, proposerIDStore=IStore}) ->
     [ProposerState] = pdUtils:etsLookup(PStore, ID, #proposerState{ballotid=ID}),
+    Q1 = ProposerState#proposerState.reqQueue,
+    Q2 = queue:in({From, OurProposal}, Q1),
+    ets:update_element(PStore, ID, {#proposerState.reqQueue, Q2}),
     case ProposerState of
         #proposerState{ballotid=ID, proposer=undefined} ->
-            % TODO: set member count in conf file
-            P = pdProposer:proposer(ID, PStore, length(clusterNodes()), OurProposal),
-            ets:update_element(PStore, ID, {#proposerState.proposer, P}),
-            ets:insert(IStore, #proposer{pID=P, ballotid=ID}),
-            pdProposer:fire(P),
-            P;
-        #proposerState{ballotid=ID, proposer=P} -> P
+            startProposer(ID, PStore, IStore),
+            ok;
+        #proposerState{ballotid=ID, proposer=_P} -> ok
     end,
-    {reply, ok, State};
+    {noreply, State};
 
 handle_call({acceptorState, ID}, _From, State=#state{acceptorStore=AStore}) ->
     [AccState] = pdUtils:etsLookup(AStore, ID, #acceptorState{ballotid=ID}),
@@ -261,8 +260,17 @@ handle_info({'EXIT', Pid, _Reason}, State=#state{proposerStore=PStore,
                                                  proposerIDStore=IStore}) ->
     case ets:lookup(IStore, Pid) of
         [#proposer{ballotid=BallotID}] ->
-            ets:update_element(PStore, BallotID, {#proposerState.proposer, undefined}),
-            ets:delete(IStore, Pid);
+            ets:delete(IStore, Pid),
+            case ets:lookup(PStore, BallotID) of
+                [PState = #proposerState{reqQueue=Q1}] ->
+                    {{value, {From, _Proposal}}, Q2} = queue:out(Q1),
+                    ets:insert(PStore, PState#proposerState{proposer=undefined,
+                                                            reqQueue=Q2}),
+                    gen_server:reply(From, ok),
+                    startProposer(BallotID, PStore, IStore),
+                    ok;
+                _ -> ok
+            end;
         _ -> ok
     end,
     {noreply, State};
@@ -287,3 +295,22 @@ terminate(_Reason, #state{acceptorStore=AStore, proposerStore=PStore,
 
 code_change(_OldVer, State, _Extra) ->
     {ok, State}.
+
+
+startProposer(BallotID, PStore, PidStore) ->
+    case ets:lookup(PStore, BallotID) of
+        [P = #proposerState{reqQueue=Q1}] ->
+            case queue:peek(Q1) of
+                {value, {_From, OurProposal}} ->
+                    % TODO: set member count in conf file
+                    P = pdProposer:proposer(BallotID, PStore,
+                                            length(clusterNodes()), OurProposal),
+                    ets:update_element(PStore, BallotID,
+                                       {#proposerState.proposer, P}),
+                    ets:insert(PidStore, #proposer{pID=P, ballotid=BallotID}),
+                    pdProposer:fire(P);
+                empty -> ok
+            end;
+        _ -> ok
+    end,
+    ok.
