@@ -8,6 +8,7 @@
       pdApp,
       pdLeaseServer,
       pdProposer,
+      pdReqRouter,
       pdServer,
       pdServerSup,
       pdUtils]},
