@@ -2,7 +2,7 @@
 
 % API
 -export([add/1, minus/1, getValue/0, raise/0, joinCluster/0, makeBallot/1,
-         propose/2, acceptorState/1, learnerInp/1, learn/1, invalidateInp/1,
+         propose/2, propose/3, acceptorState/1, learnerInp/1, learn/1, invalidateInp/1,
          leaseTest/0]).
 
 
@@ -32,7 +32,11 @@ makeBallot(ID) ->
 
 
 propose(ID, Proposal) ->
-    pdServer:propose(pdServer:getPdServer(), ID, Proposal).
+    pdProposer:propose(pdProposer:getPdProposalHandler(), ID, Proposal).
+
+
+propose(ID, Proposal, Override) ->
+    pdProposer:propose(pdProposer:getPdProposalHandler(), ID, Proposal, Override).
 
 
 acceptorState(ID) ->

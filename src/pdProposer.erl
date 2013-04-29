@@ -1,39 +1,77 @@
 -module(pdProposer).
 
 % API
--export([proposer/4, fire/1]).
+-export([getPdProposalHandlerAt/1, getPdProposalHandler/0, propose/3, propose/4]).
+
+% pdReqRouter callbacks
+-export([proposerWorker/0, doWork/2, reqHash/1, workerStateInit/0,
+         workerStateClean/1]).
 
 % callback for module itself.
--export([sessionStart/1]).
+-export([sessionStart/1, determineInp/2]).
 
 -include("ballotState.hrl").
+-include("pdReqRouter.hrl").
 
--record(session, {ballotid, proposerStore, proposal, memberCount=0,
+-record(session, {ballotid, proposerStore, proposal, memberCount=0, override,
                   proposeTimeoutRef}).
 
-% TODO: allow register application custom determineInp callback
+
+% API
+getPdProposalHandlerAt(Node) ->
+    pdUtils:getServerAt(pdProposalHandler, Node).
 
 
-proposer(BallotID, ProposerStore, MemberCount, OurProposal) ->
-    process_flag(trap_exit, true),
-    spawn_link(?MODULE, sessionStart,
-               [#session{ballotid=BallotID, proposerStore=ProposerStore,
-                         proposal=OurProposal, memberCount=MemberCount}]).
+getPdProposalHandler() ->
+    getPdProposalHandlerAt(node()).
 
 
-fire(Proposer) -> Proposer!{startSession}.
+propose(Server, ID, OurProposal) ->
+    propose(Server, ID, OurProposal, #proposerOverride{}).
 
 
-sessionStart(Session) ->
+propose(Server, ID, OurProposal, undefined) ->
+    propose(Server, ID, OurProposal, #proposerOverride{});
+
+propose(Server, ID, OurProposal, Override) ->
+    pdReqRouter:request(Server, {ID, OurProposal, Override}, ?PROPOSETIMEOUT).
+
+
+% pdReqRouter callbacks
+proposerWorker() ->
+    #workerCallback{
+        doWork=fun ?MODULE:doWork/2, reqHash=fun ?MODULE:reqHash/1,
+        workerStateInit=fun ?MODULE:workerStateInit/0,
+        workerStateClean=fun ?MODULE:workerStateClean/1}.
+
+
+doWork({ID, OurProposal, Override}, Store) ->
+    sessionStart(
+        #session{ballotid=ID, proposerStore=Store, proposal=OurProposal,
+                 override=Override,
+                 memberCount=length(pdUtils:clusterNodes())}),
+    pdReqRouter:workerReturn(Store, ok).
+
+
+reqHash({ID, _OurProposal, _Override}) -> ID.
+
+
+workerStateInit() ->
+    ets:new(proposerStore,
+        [set, {keypos, #proposerState.ballotid}, public]).
+
+
+workerStateClean(Store) ->
+    ets:delete(Store).
+
+
+% proposer logic
+sessionStart(Session=#session{ballotid=ID, proposerStore=Store}) ->
     {A1, A2, A3} = os:timestamp(),
     random:seed(A1, A2, A3),
     TRef = pdUtils:timeout(?PROPOSETIMEOUT),
-    receive
-        {startSession} ->
-            sessionLoop(Session#session{proposeTimeoutRef=TRef})
-    after ?WAITSTART ->
-        error
-    end.
+    pdUtils:etsInitDefault(Store, ID, #proposerState{ballotid=ID}),
+    sessionLoop(Session#session{proposeTimeoutRef=TRef}).
 
 
 calmDown() ->
@@ -52,28 +90,32 @@ nextRound(Session=#session{proposeTimeoutRef=TRef}) ->
 
 
 sessionLoop(Session=#session{ballotid=BallotID, proposerStore=Store,
-                             proposal=OurProposal}) ->
+                             proposal=OurProposal, override=Override}) ->
     [ProposerState] = ets:lookup(Store, BallotID),
     MBal =  ProposerState#proposerState.mbal,
     ets:update_element(Store, BallotID, {#proposerState.mbal, pdUtils:incBalNum(MBal)}),
     case runStage(Session, prepare) of
         {ok, Responses} ->
-            io:format('prepare ok ~w~n', [Responses]),
-            Inp = determineInp(OurProposal, Responses),
-            io:format('Inp ~w~n', [Inp]),
+            io:format("prepare ok ~w~n", [Responses]),
+            DetermineInp = getOverride(Override, determineInp),
+            Inp = DetermineInp(OurProposal, Responses),
+            io:format("Inp ~w~n", [Inp]),
             ets:update_element(Store, BallotID, {#proposerState.inp, Inp}),
             case runStage(Session, accept) of
                 {ok, _R} ->
-                    io:format('accept ok~n'),
+                    io:format("accept ok~n"),
                     ok;
                 _ ->
-                    io:format('accept fail~n'),
+                    io:format("accept fail~n"),
                     nextRound(Session)
             end;
         _ ->
-            io:format('prepare fail~n'),
+            io:format("prepare fail~n"),
             nextRound(Session)
     end.
+
+
+getOverride(#proposerOverride{determineInp=F}, determineInp) -> F.
 
 
 determineInp(OurProposal, Responses) ->
@@ -114,8 +156,8 @@ runStage(_Session=#session{ballotid=BallotID,
     end,
     R = collectResp(Stage, ?COLLECTTIMEOUT, M, MsgID),
     case {R, Stage} of
-        {{error, {rejected, MBal}}, _} ->
-            NewMBal = pdUtils:incBalNumTo(MBal),
+        {{error, {rejected, HigherMBal}}, _} ->
+            NewMBal = pdUtils:incBalNumTo(HigherMBal),
             ets:update_element(Store, BallotID, {#proposerState.mbal, NewMBal});
         {{ok, _}, accept} ->
             pdServer:castCommit(#commit{ballotid=BallotID, bal=MBal,
@@ -147,6 +189,7 @@ collectRespAcc(Stage, MemberCount, MsgID, TimerRef, Response) ->
                     collectRespAcc(Stage, MemberCount, MsgID, TimerRef, Rs)
             end;
         #reject{msgID=MsgID, mbal=MBal} ->
+            io:format("Rejectd by accepter mbal ~w~n", [MBal]),
             {error, {rejected, MBal}};
         {collectTimeout, TimerRef} ->
             {error, timeout};

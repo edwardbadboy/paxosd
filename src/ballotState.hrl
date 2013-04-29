@@ -1,4 +1,3 @@
-% TODO: Allow application custom field in balNum
 % the custom field is the second field
 % for mbal and bal number
 -record(balNum, {n=0, nodeName=node()}).
@@ -11,7 +10,7 @@
 % mbal: next ballot number to send
 % inp: value to be proposed
 % proposer: pdProposer process id
--record(proposerState, {ballotid=0, mbal=#balNum{}, inp, proposer, reqQueue=queue:new()}).
+-record(proposerState, {ballotid=0, mbal=#balNum{}, inp}).
 
 % inp: value learned
 -record(learnerState, {ballotid=0, inp}).
@@ -30,6 +29,8 @@
 -record(reject, {ballotid=0, msgID, mbal=#balNum{}}).
 -record(learn, {ballotid=0, bal=#balNum{}, inp}).
 -record(commit, {ballotid=0, bal=#balNum{}, inp}).
+
+-record(proposerOverride, {determineInp=fun pdProposer:determineInp/2}).
 
 % TODO start jokers and link them together automatically
 -define(JOKERS, ['joker1@zhshzhouf17', 'joker2@zhshzhouf17']).

@@ -15,10 +15,6 @@
          code_change/3]).
 
 
-% TODO: add pdReqRouter to Supervisor tree
-% move pdProposer management to pdReqRouter
-
-
 % called by worker process to return the new task State
 workerReturn(WorkerState, R) ->
     exit({return, WorkerState, R}).

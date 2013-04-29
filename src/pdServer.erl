@@ -4,7 +4,7 @@
 % API
 -export([start_link/0, stop/1,
          add/2, minus/2, getValue/1, raise/1,
-         joinCluster/1, makeBallot/2, propose/3, acceptorState/2, learnerInp/2,
+         joinCluster/1, makeBallot/2, acceptorState/2, learnerInp/2,
          learn/2, invalidateInp/2,
          castPrepare/2, castAccept/2, castCommit/1]).
 
@@ -21,7 +21,7 @@
 % self callbacks
 -export([learnRemoteValue/3]).
 
--record(state, {value=0, acceptorStore, proposerStore, proposerIDStore, learnerStore}).
+-record(state, {value=0, acceptorStore, learnerStore}).
 -include("ballotState.hrl").
 
 % TODO: keep the ets table when pdServer is restarted
@@ -35,20 +35,13 @@ getPdServer() ->
     getPdServerAt(node()).
 
 
-% module local util functions
-clusterNodes() ->
-    lists:subtract([node()|nodes()], ?JOKERS).
-
-
 abcast(FunSpec, Paras) ->
-    rpc:eval_everywhere(clusterNodes(),
+    rpc:eval_everywhere(pdUtils:clusterNodes(),
                         pdServer, FunSpec, Paras).
 
 
-ballotInitDefault(ID, #state{acceptorStore=AStore, proposerStore=PStore,
-                             learnerStore=LStore}) ->
+ballotInitDefault(ID, #state{acceptorStore=AStore, learnerStore=LStore}) ->
     pdUtils:etsInitDefault(AStore, ID, #acceptorState{ballotid=ID}),
-    pdUtils:etsInitDefault(PStore, ID, #proposerState{ballotid=ID}),
     pdUtils:etsInitDefault(LStore, ID, #learnerState{ballotid=ID}).
 
 % API functions
@@ -82,10 +75,6 @@ joinCluster(Server) ->
 
 makeBallot(Server, ID) ->
     gen_server:call(Server, {makeBallot, ID}).
-
-
-propose(Server, ID, OurProposal) ->
-    gen_server:call(Server, {propose, ID, OurProposal}, ?PROPOSETIMEOUT).
 
 
 acceptorState(Server, ID) ->
@@ -150,9 +139,7 @@ init([]) ->
             ets:new(learnerStore,
                 [set, {keypos, #learnerState.ballotid}, public])
     end,
-    P = ets:new(proposerStore, [set, {keypos, #proposerState.ballotid}, public]),
-    I = ets:new(proposers, [set, {keypos, #proposer.pID}, public]),
-    {ok, #state{acceptorStore=A, proposerStore=P, proposerIDStore=I, learnerStore=L}}.
+    {ok, #state{acceptorStore=A, learnerStore=L}}.
 
 
 handle_call({getValue}, _From, State) ->
@@ -181,20 +168,6 @@ handle_call({joinCluster}, _From, State) ->
 handle_call({makeBallot, ID}, _From, State) ->
     ballotInitDefault(ID, State),
     {reply, ok, State};
-
-handle_call({propose, ID, OurProposal}, From,
-            State=#state{proposerStore=PStore, proposerIDStore=IStore}) ->
-    [ProposerState] = pdUtils:etsLookup(PStore, ID, #proposerState{ballotid=ID}),
-    Q1 = ProposerState#proposerState.reqQueue,
-    Q2 = queue:in({From, OurProposal}, Q1),
-    ets:update_element(PStore, ID, {#proposerState.reqQueue, Q2}),
-    case ProposerState of
-        #proposerState{ballotid=ID, proposer=undefined} ->
-            startProposer(ID, PStore, IStore),
-            ok;
-        #proposerState{ballotid=ID, proposer=_P} -> ok
-    end,
-    {noreply, State};
 
 handle_call({learn, ID}, From, State=#state{learnerStore=LStore}) ->
     spawn_link(?MODULE, learnRemoteValue, [From, ID, LStore]),
@@ -270,12 +243,7 @@ handle_call({commit, _Msg=#commit{ballotid=ID, bal=Bal, inp=Inp}},
     {reply, ok, State}.
 
 
-handle_cast(stop, State=#state{proposerIDStore=Store}) ->
-    ets:foldl(
-        fun(#proposer{pID=PID}, ok) ->
-            exit(PID, kill), ok
-        end,
-        ok, Store),
+handle_cast(stop, State) ->
     {stop, normal, State};
 
 handle_cast({msg, From, Msg}, State) ->
@@ -286,31 +254,11 @@ handle_cast(_Msg, State) ->
     {noreply, State}.
 
 
-handle_info({'EXIT', Pid, _Reason}, State=#state{proposerStore=PStore,
-                                                 proposerIDStore=IStore}) ->
-    case ets:lookup(IStore, Pid) of
-        [#proposer{ballotid=BallotID}] ->
-            ets:delete(IStore, Pid),
-            case ets:lookup(PStore, BallotID) of
-                [PState = #proposerState{reqQueue=Q1}] ->
-                    {{value, {From, _Proposal}}, Q2} = queue:out(Q1),
-                    ets:insert(PStore, PState#proposerState{proposer=undefined,
-                                                            reqQueue=Q2}),
-                    gen_server:reply(From, ok),
-                    startProposer(BallotID, PStore, IStore),
-                    ok;
-                _ -> ok
-            end;
-        _ -> ok
-    end,
-    {noreply, State};
-
 handle_info(_Info, State) ->
     {noreply, State}.
 
 
-terminate(_Reason, #state{acceptorStore=AStore, proposerStore=PStore,
-                          proposerIDStore=IStore, learnerStore=LStore}) ->
+terminate(_Reason, #state{acceptorStore=AStore, learnerStore=LStore}) ->
     lists:foreach(
         fun(Tab) ->
             F = filename:join([
@@ -319,7 +267,7 @@ terminate(_Reason, #state{acceptorStore=AStore, proposerStore=PStore,
                     erlang:atom_to_list(ets:info(Tab, name))]),
             ets:tab2file(Tab, F)
         end, [AStore, LStore]),
-    lists:foreach(fun ets:delete/1, [AStore, PStore, IStore, LStore]),
+    lists:foreach(fun ets:delete/1, [AStore, LStore]),
     ok.
 
 
@@ -327,27 +275,8 @@ code_change(_OldVer, State, _Extra) ->
     {ok, State}.
 
 
-startProposer(BallotID, PStore, PidStore) ->
-    case ets:lookup(PStore, BallotID) of
-        [#proposerState{reqQueue=Q1}] ->
-            case queue:peek(Q1) of
-                {value, {_From, OurProposal}} ->
-                    % TODO: set member count in conf file
-                    P = pdProposer:proposer(BallotID, PStore,
-                                            length(clusterNodes()), OurProposal),
-                    ets:update_element(PStore, BallotID,
-                                       {#proposerState.proposer, P}),
-                    ets:insert(PidStore, #proposer{pID=P, ballotid=BallotID}),
-                    pdProposer:fire(P);
-                empty -> ok
-            end;
-        _ -> ok
-    end,
-    ok.
-
-
 learnRemoteValue(ReplyTo, BallotID, LStore) ->
-    case lists:subtract(clusterNodes(), [node()]) of
+    case lists:subtract(pdUtils:clusterNodes(), [node()]) of
         [] -> gen_server:reply(ReplyTo, {error, no_nodes});
         [N|_] ->
             case rpc:call(N, pdServer, learnerInp, [BallotID], ?RPCTIMEOUT) of
