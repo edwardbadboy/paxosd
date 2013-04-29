@@ -231,6 +231,7 @@ handle_call({accept, ReplyTo,
 
 handle_call({commit, _Msg=#commit{ballotid=ID, bal=Bal, inp=Inp}},
             _From, State=#state{acceptorStore=AStore, learnerStore=LStore}) ->
+    io:format("commit bal ~w inp ~w~n", [Bal, Inp]),
     case ets:update_element(LStore, ID, {#learnerState.inp, Inp}) of
         false -> ets:insert(LStore, #learnerState{ballotid=ID, inp=Inp});
         _ -> ok
@@ -285,13 +286,10 @@ learnRemoteValue(ReplyTo, BallotID, LStore) ->
                 undefined ->
                     case paxosd:propose(BallotID, undefined) of
                         ok ->
-                            case ets:lookup(LStore, BallotID) of
-                                [#learnerState{inp=Inp}] ->
-                                    gen_server:reply(ReplyTo, {ok, Inp});
-                                _ ->
-                                    gen_server:reply(ReplyTo, {error, propose_failed})
-                            end;
-                        R -> gen_server:reply(ReplyTo, {error, R})
+                            paxosd:learnerInp(BallotID);
+                        R ->
+                            io:format("failed to learn remote value, proposer ~w~n", [R]),
+                            gen_server:reply(ReplyTo, {error, R})
                     end;
                 Inp ->
                     ets:update_element(LStore, BallotID, {#learnerState.inp, Inp}),

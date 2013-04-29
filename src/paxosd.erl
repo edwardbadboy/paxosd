@@ -2,8 +2,9 @@
 
 % API
 -export([add/1, minus/1, getValue/0, raise/0, joinCluster/0, makeBallot/1,
-         propose/2, propose/3, acceptorState/1, learnerInp/1, learn/1, invalidateInp/1,
-         leaseTest/0]).
+         propose/2, propose/3, acceptorState/1, learnerInp/1, learn/1, invalidateInp/1]).
+
+-export([leaseWhose/1, leaseGet/1, leaseWait/1, leaseRefresh/1, leaseRelease/1]).
 
 
 % API implementation
@@ -55,5 +56,21 @@ invalidateInp(ID) ->
     pdServer:invalidateInp(pdServer:getPdServer(), ID).
 
 
-leaseTest() ->
-    pdLeaseServer:test(pdLeaseServer:getServer()).
+leaseWhose(ID) ->
+    pdLease:leaseWhose(ID).
+
+
+leaseGet(ID) ->
+    pdLease:leaseGet(ID).
+
+
+leaseWait(ID) ->
+    pdLease:leaseWait(ID).
+
+
+leaseRefresh(ID) ->
+    pdLease:leaseRefresh(ID).
+
+
+leaseRelease(ID) ->
+    pdLease:leaseRelease(ID).

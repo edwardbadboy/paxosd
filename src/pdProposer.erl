@@ -34,7 +34,10 @@ propose(Server, ID, OurProposal, undefined) ->
     propose(Server, ID, OurProposal, #proposerOverride{});
 
 propose(Server, ID, OurProposal, Override) ->
-    pdReqRouter:request(Server, {ID, OurProposal, Override}, ?PROPOSETIMEOUT).
+    case pdReqRouter:request(Server, {ID, OurProposal, Override}, ?PROPOSETIMEOUT) of
+        {ok, R} -> R;
+        Error -> Error
+    end.
 
 
 % pdReqRouter callbacks

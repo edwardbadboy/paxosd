@@ -1,7 +1,7 @@
 -module(pdUtils).
 -export([nfoldl/3, nfoldlTest/0, incBalNum/1, incBalNumTo/1,
          etsInitDefault/3, etsLookup/3, timeout/1, isTimeout/1, flushMsg/0,
-         getServerAt/2, clusterNodes/0]).
+         getServerAt/2, clusterNodes/0, nowUTC/0]).
 -include("ballotState.hrl").
 
 
@@ -73,3 +73,6 @@ getServerAt(Server, Node) ->
 
 clusterNodes() ->
     lists:subtract([node()|nodes()], ?JOKERS).
+
+
+nowUTC() -> calendar:datetime_to_gregorian_seconds(calendar:universal_time()).
