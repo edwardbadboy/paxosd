@@ -1,2 +1,4 @@
 *.beam
 paxosd.vim
+tags
+cscope.out
