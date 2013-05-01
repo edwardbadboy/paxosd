@@ -1,0 +1,8 @@
+application:start(paxosd).
+paxosd:joinCluster().
+
+paxosd:leaseGet(1).
+paxosd:leaseRefresh(1).
+
+% at another node
+paxosd:leaseWait(1).

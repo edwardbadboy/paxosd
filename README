@@ -1,0 +1,54 @@
+1. What's paxosd
+paxosd is a distributed Erlang application implementing the Paxos algorithm. It exports APIs like joinCluster, propose, learn and so on.
+
+It also implements an distributed lock service over the paxosd APIs, exporting distributed lock APIs like leaseGet, leaseWhose, leaseRefresh, leaseWait, leaseRelease.
+
+
+2. How can I test it
+
+2.1 Compiling the code
+Under paxosd source directoy, run the following command.
+erlc -o ebin src/*.erl
+
+2.2 Start the "jokers"
+Firstly start 2 contact node named 'joker1' and 'joker2' like following.
+erl -sname 'joker1'
+erl -sname 'joker2'
+
+2.3 Start the paxosd nodes
+Then start as many nodes as you wish. Go 1 level up from the paxosd source directory, and run the following command.
+erl -pa paxosd/ebin -sname 'bob'
+erl -pa paxosd/ebin -sname 'alice'
+
+2.4 Join the cluster
+Run the following command at each node.
+application:start(paxosd).
+paxosd:joinCluster().
+
+The node will contact the jokers to join the cluster. The joker list is hard coded in the ballotState.hrl. You should edit this list to fit to your environment before running the application.
+
+2.5 Test the lease operations
+Bob side:
+paxosd:leaseGet(1).
+Alice side
+paxosd:leaseGet(1).
+
+You will see Bob successfully get the lease, but Alice not.
+
+Alice side:
+paxosd:leaseWait(1).
+
+You will see Alice wait until Bob's lease is timeout, then Alice get the lease.
+
+Alice side:
+paxosd:leaseRefresh(1).
+
+You will see Alice update the lease time, and other nodes will be blocking on leaseWait calls.
+
+
+3. TODO
+
+3.1 Membership management
+We do not use paxos algorithm to track the current cluster nodes. This is too complicated. Maybe in future we can try to implement it over the paxosd algorithm. For now we can just hard coded the count of members. Currently in code the member count is the count of active nodes when we start a proposal. This should be change into a configurabel value.
+
+3.2 Add unit test and distributed system test
