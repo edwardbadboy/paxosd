@@ -1,0 +1,8 @@
+#!/usr/bin/bash
+
+if [ -z "$1" ]; then
+    echo "Usage: \"$0\" NodeName"
+    exit 1
+fi
+
+erl -smp enable -sname "$1" -pa paxosd/ebin +K true +A 8

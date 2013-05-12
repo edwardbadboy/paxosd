@@ -1,0 +1,28 @@
+#!/usr/bin/bash
+
+if [ -z "$1" ]; then
+    echo "Usage: \"$0\" JokerName"
+    exit 1
+fi
+
+jokerScript="paxosd/ebin/$1"
+
+cat > "$jokerScript" <<EOF
+#!/usr/bin/env escript
+%%! -smp enable -sname $1 -pa paxosd/ebin +K true +A 8
+main([]) ->
+    io:format("Starting ~w~n", [node()]),
+    main_loop(0, pdUtils:contactNodes()).
+
+
+main_loop(N, Contacts) ->
+    io:format("Times ~w start ping nodes~n", [N]),
+    lists:foreach(fun net_adm:ping/1, Contacts),
+    io:format("Node ~w Nodes ~w ~n", [node(), nodes()]),
+    timer:sleep(60000),
+    main_loop(N + 1, Contacts).
+EOF
+
+chmod +x "$jokerScript"
+
+"$jokerScript"

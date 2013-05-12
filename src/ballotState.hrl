@@ -33,6 +33,7 @@
 -record(proposerOverride, {determineInp=fun pdProposer:determineInp/2}).
 
 % TODO start jokers and link them together automatically
+% TODO read jokers from configuration file
 -define(JOKERS, ['joker1@zhshzhouf17', 'joker2@zhshzhouf17']).
 
 % millisecond
