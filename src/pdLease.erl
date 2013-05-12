@@ -39,6 +39,10 @@ leaseRefresh(ID) -> leaseGet(ID).
 
 
 leaseRelease(ID) ->
+    % Safe to call leaseRelease even if the lease is not held by us. If the
+    % lease is held by other node and it's not timeout, determineInp will
+    % select the original lease owner to commit, so does not change anything
+    % except the mbal.
     paxosd:propose(
         ID, {self(), 0},
         #proposerOverride{determineInp=fun ?MODULE:determineInp/2}).

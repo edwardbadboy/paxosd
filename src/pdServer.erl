@@ -279,20 +279,14 @@ code_change(_OldVer, State, _Extra) ->
 learnRemoteValue(ReplyTo, BallotID, LStore) ->
     case lists:subtract(pdUtils:clusterNodes(), [node()]) of
         [] -> gen_server:reply(ReplyTo, {error, no_nodes});
-        [N|_] ->
-            case rpc:call(N, pdServer, learnerInp, [BallotID], ?RPCTIMEOUT) of
-                {badrpc, Reason} ->
-                    gen_server:reply(ReplyTo, {error, {badrpc, Reason}});
-                undefined ->
-                    case paxosd:propose(BallotID, undefined) of
-                        ok ->
-                            paxosd:learnerInp(BallotID);
-                        R ->
-                            io:format("failed to learn remote value, proposer ~w~n", [R]),
-                            gen_server:reply(ReplyTo, {error, R})
-                    end;
-                Inp ->
-                    ets:update_element(LStore, BallotID, {#learnerState.inp, Inp}),
-                    gen_server:reply(ReplyTo, {ok, Inp})
+        [_N|_] ->
+            case paxosd:propose(BallotID, undefined) of
+                ok ->
+                    Inp = paxosd:learnerInp(BallotID),
+                    gen_server:reply(ReplyTo, Inp),
+                    ets:update_element(LStore, BallotID, {#learnerState.inp, Inp});
+                R ->
+                    io:format("failed to learn remote value, proposer ~w~n", [R]),
+                    gen_server:reply(ReplyTo, {error, R})
             end
     end.
