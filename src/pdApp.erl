@@ -5,8 +5,8 @@
 -export([start/2, stop/1]).
 
 
-start(_Type, _Args) ->
-    pdServerSup:start_link().
+start(_Type, Args) ->
+    pdServerSup:start_link(Args).
 
 
 stop(_State) -> ok.

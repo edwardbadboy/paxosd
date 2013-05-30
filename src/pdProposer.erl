@@ -52,7 +52,8 @@ doWork({ID, OurProposal, Override}, Store) ->
     sessionStart(
         #session{ballotid=ID, proposerStore=Store, proposal=OurProposal,
                  override=Override,
-                 memberCount=length(pdUtils:clusterNodes())}),
+                 % memberCount=length(pdUtils:clusterNodes())}),
+                 memberCount=paxosd:configGet(memberCount)}),
     pdReqRouter:workerReturn(Store, ok).
 
 

@@ -6,6 +6,8 @@
 
 -export([leaseWhose/1, leaseGet/1, leaseWait/1, leaseRefresh/1, leaseRelease/1]).
 
+-export([configGet/1, configReload/1, configReload/0]).
+
 
 % API implementation
 add(Value) ->
@@ -74,3 +76,15 @@ leaseRefresh(ID) ->
 
 leaseRelease(ID) ->
     pdLease:leaseRelease(ID).
+
+
+configGet(Key) ->
+    pdConfig:lookup(pdConfig:getPdConfigServer(), Key).
+
+
+configReload(ConfPath) ->
+    pdConfig:reloadConfig(pdConfig:getPdConfigServer(), ConfPath).
+
+
+configReload() ->
+    pdConfig:reloadConfig(pdConfig:getPdConfigServer()).
