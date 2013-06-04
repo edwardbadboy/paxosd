@@ -1,0 +1,5 @@
+#!/usr/bin/env escript
+%%! -smp enable -sname testMaster -pa ../ebin +K true +A 8
+main([]) ->
+    io:format("Starting ~w~n", [node()]),
+	ct_master:run("distributed.spec").

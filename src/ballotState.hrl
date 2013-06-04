@@ -35,6 +35,7 @@
 % TODO start jokers and link them together automatically
 % TODO read jokers from configuration file
 -define(JOKERS, ['joker1@zhshzhouf17', 'joker2@zhshzhouf17']).
+-define(CTMASTER, 'testMaster@zhshzhouf17').
 
 % millisecond
 -define(JOINTIMEOUT, 20000).

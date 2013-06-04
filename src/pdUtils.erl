@@ -72,7 +72,7 @@ getServerAt(Server, Node) ->
 
 
 clusterNodes() ->
-    lists:subtract([node()|nodes()], ?JOKERS).
+    lists:subtract([node()|nodes()], [?CTMASTER | ?JOKERS]).
 
 
 contactNodes() ->
