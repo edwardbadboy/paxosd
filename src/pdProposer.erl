@@ -1,14 +1,15 @@
 -module(pdProposer).
 
 % API
--export([getPdProposalHandlerAt/1, getPdProposalHandler/0, propose/3, propose/4]).
+-export([getPdProposalHandlerAt/1, getPdProposalHandler/0, propose/3, propose/4,
+         unsafeUpdate/3]).
 
 % pdReqRouter callbacks
 -export([proposerWorker/0, doWork/2, reqHash/1, workerStateInit/0,
          workerStateClean/1]).
 
 % callback for module itself.
--export([sessionStart/1, determineInp/2]).
+-export([sessionStart/1, determineInp/2, unsafeDetermineInp/2]).
 
 -include("ballotState.hrl").
 -include("pdReqRouter.hrl").
@@ -38,6 +39,11 @@ propose(Server, ID, OurProposal, Override) ->
         {ok, R} -> R;
         Error -> Error
     end.
+
+
+unsafeUpdate(Server, ID, Proposal) ->
+    ?MODULE:propose(Server, ID, Proposal,
+                    #proposerOverride{determineInp=fun ?MODULE:unsafeDetermineInp/2}).
 
 
 % pdReqRouter callbacks
@@ -139,6 +145,10 @@ determineInp(OurProposal, Responses) ->
         undefined -> OurProposal;
         #promise{inp=Inp} -> Inp
     end.
+
+
+unsafeDetermineInp(OurProposal, _Responses) ->
+    OurProposal.
 
 
 runStage(_Session=#session{ballotid=BallotID,

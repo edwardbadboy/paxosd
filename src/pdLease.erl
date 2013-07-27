@@ -27,8 +27,14 @@ leaseGet(ID) ->
 leaseWait(ID) ->
     case leaseGet(ID) of
         {ok, R} -> {ok, R};
-        {error, {_, When}} ->
-            SecondsLeft = erlang:max(?LEASETIMEOUT - (pdUtils:nowUTC() - When), 1),
+        {error, Inp} ->
+            SecondsLeft =
+                case Inp of
+                    {_, When} ->
+                        erlang:max(?LEASETIMEOUT - (pdUtils:nowUTC() - When), 1);
+                    undefined ->
+                        5
+                end,
             io:format("Get lease fail, try again in ~ws~n", [SecondsLeft]),
             timer:sleep(SecondsLeft * 1000),
             leaseWait(ID)

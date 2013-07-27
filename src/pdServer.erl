@@ -220,14 +220,14 @@ handle_call({prepare, ReplyTo,
             case AccState of
                 #acceptorState{mbal=OurMBal, bal=Bal, inp=Inp}
                 when OurMBal < MBal ->
-                    io:format("prepare ok, bigger mbal, inp ~w~n", [Inp]),
+                    io:format("prepare ok, bigger mbal, bid ~w inp ~w~n", [BallotID, Inp]),
                     ets:update_element(Store, BallotID,
                                        {#acceptorState.mbal, MBal}),
                     R = #promise{ballotid=BallotID, msgID=MsgID, bal=Bal,
                                  inp=Inp},
                     ReplyTo!R;
                 #acceptorState{mbal=OurMBal} when OurMBal >= MBal ->
-                    io:format("prepare fail, less mbal ~w ~w~n", [OurMBal, MBal]),
+                    io:format("prepare fail, less mbal bid ~w our ~w req ~w~n", [BallotID, OurMBal, MBal]),
                     R = #reject{ballotid=BallotID, msgID=MsgID, mbal=OurMBal},
                     ReplyTo!R
             end,
@@ -240,7 +240,7 @@ handle_call({accept, ReplyTo,
                                          #acceptorState{ballotid=BallotID}),
             case AccState of
                 #acceptorState{mbal=OurMBal} when OurMBal =< MBal ->
-                    io:format("accept ok, bigger mbal, inp ~w~n", [Inp]),
+                    io:format("accept ok, bigger mbal, bid ~w inp ~w~n", [BallotID, Inp]),
                     ets:update_element(Store, BallotID,
                                        [{#acceptorState.mbal, MBal},
                                         {#acceptorState.bal, MBal},
@@ -248,7 +248,7 @@ handle_call({accept, ReplyTo,
                     R = #accepted{ballotid=BallotID, msgID=MsgID},
                     ReplyTo!R;
                 #acceptorState{mbal=OurMBal} when OurMBal > MBal ->
-                    io:format("accept fail, less mbal ~w ~w~n", [OurMBal, MBal]),
+                    io:format("accept fail, less mbal bid ~w our ~w req ~w~n", [BallotID, OurMBal, MBal]),
                     R = #reject{ballotid=BallotID, msgID=MsgID, mbal=OurMBal},
                     ReplyTo!R
             end,
@@ -256,7 +256,7 @@ handle_call({accept, ReplyTo,
 
 handle_call({commit, _Msg=#commit{ballotid=ID, bal=Bal, inp=Inp}},
             _From, State=#state{acceptorStore=AStore, learnerStore=LStore}) ->
-    io:format("commit bal ~w inp ~w~n", [Bal, Inp]),
+    io:format("commit bal bid ~w bal ~w inp ~w~n", [ID, Bal, Inp]),
     case ets:update_element(LStore, ID, {#learnerState.inp, Inp}) of
         false -> ets:insert(LStore, #learnerState{ballotid=ID, inp=Inp});
         _ -> ok
