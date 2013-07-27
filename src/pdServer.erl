@@ -4,7 +4,7 @@
 % API
 -export([start_link/0, stop/1,
          add/2, minus/2, getValue/1, raise/1,
-         joinCluster/1, makeBallot/2, acceptorState/2, learnerInp/2,
+         joinCluster/1, waitNodes/2, makeBallot/2, acceptorState/2, learnerInp/2,
          learn/2, invalidateInp/2,
          castPrepare/2, castAccept/2, castCommit/1]).
 
@@ -71,6 +71,11 @@ raise(Server) ->
 
 joinCluster(Server) ->
     gen_server:call(Server, {joinCluster}, ?JOINTIMEOUT).
+
+
+% waitNodes(Server, all|any|major)
+waitNodes(Server, Many) ->
+    gen_server:call(Server, {waitNodes, Many}, ?JOINTIMEOUT + 10000).
 
 
 makeBallot(Server, ID) ->
@@ -164,6 +169,26 @@ handle_call({joinCluster}, _From, State) ->
       false -> {reply, error, State};
       true -> {reply, ok, State}
     end;
+
+handle_call({waitNodes, Many}, _From, State) ->
+    MCount = paxosd:configGet(memberCount),
+    NodesReady = fun(Nodes, any) ->
+                        length(Nodes) >= 1;
+                    (Nodes, all) ->
+                        length(Nodes) =:= MCount;
+                    (Nodes, major) ->
+                        pdUtils:isMajority(Nodes, MCount)
+                 end,
+    WaitForNodes =
+        fun(_E) -> case NodesReady(pdUtils:clusterNodes(), Many) of
+                    true -> false;
+                    _ ->
+                        timer:sleep(1000),
+                        true
+                   end
+        end,
+    Seq = lists:seq(0, erlang:trunc(?JOINTIMEOUT div 1000) + 1),
+    {reply, length(lists:dropwhile(WaitForNodes, Seq)) >= 1, State};
 
 handle_call({makeBallot, ID}, _From, State) ->
     ballotInitDefault(ID, State),

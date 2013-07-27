@@ -185,7 +185,7 @@ collectRespAcc(Stage, MemberCount, MsgID, TimerRef, Response) ->
                    R#accepted.msgID == MsgID ->
             io:format("get response ~w~n", [R]),
             Rs = [R|Response],
-            case isMajority(Rs, MemberCount) of
+            case pdUtils:isMajority(Rs, MemberCount) of
                 true ->
                     io:format("majority ok~n"),
                     {ok, Rs};
@@ -203,6 +203,3 @@ collectRespAcc(Stage, MemberCount, MsgID, TimerRef, Response) ->
     after ?COLLECTTIMEOUT ->
         {error, timeout}
     end.
-
-
-isMajority(R, MemberCount) -> length(R) * 2 > MemberCount.

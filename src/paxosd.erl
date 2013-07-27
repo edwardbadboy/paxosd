@@ -1,7 +1,7 @@
 -module(paxosd).
 
 % API
--export([add/1, minus/1, getValue/0, raise/0, joinCluster/0, makeBallot/1,
+-export([add/1, minus/1, getValue/0, raise/0, joinCluster/0, waitNodes/1, makeBallot/1,
          propose/2, propose/3, acceptorState/1, learnerInp/1, learn/1, invalidateInp/1]).
 
 -export([leaseWhose/1, leaseGet/1, leaseWait/1, leaseRefresh/1, leaseRelease/1]).
@@ -28,6 +28,11 @@ raise() ->
 
 joinCluster() ->
     pdServer:joinCluster(pdServer:getPdServer()).
+
+
+% waitNodes(all|any|major)
+waitNodes(Many) ->
+    pdServer:waitNodes(pdServer:getPdServer(), Many).
 
 
 makeBallot(ID) ->
