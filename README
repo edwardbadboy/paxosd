@@ -45,6 +45,12 @@ paxosd:leaseRefresh(1).
 
 You will see Alice update the lease time, and other nodes will be blocking on leaseWait calls.
 
+2.6 Run distributed ct test
+Firstly cd to ct/ then issue the following command.
+./run_dist.sh
+
+You may have to edit src/ballotState.hrl and ct/distributed.spec to make the hostname suite to your environment.
+
 
 3. TODO
 
@@ -52,3 +58,7 @@ You will see Alice update the lease time, and other nodes will be blocking on le
 We do not use paxos algorithm to track the current cluster nodes. This is too complicated. Maybe in future we can try to implement it over the paxosd algorithm. For now we can just hard coded the count of members. Currently in code the member count is the count of active nodes when we start a proposal. This should be change into a configurabel value.
 
 3.2 Add unit test and distributed system test
+There is no unit test, and the distributed test is very simple. We should improve them.
+
+3.3 Inform leaseWait process when a lease is released
+When a lease is released, the local node commits the message from the lease owner to local store. We can have it inform the process who is calling leaseWait to the wating process probe for the lease in time, thus avoid extra waiting.
