@@ -40,11 +40,11 @@
 % millisecond
 -define(JOINTIMEOUT, 20000).
 -define(RPCTIMEOUT, 5000).
--define(PROPOSETIMEOUT, 60000).
+-define(PROPOSETIMEOUT, 100000).
 -define(LEARNTIMEOUT, ?RPCTIMEOUT + ?PROPOSETIMEOUT).
 
--define(CALMTIME, 10000).
+-define(CALMTIME, 15000).
 -define(COLLECTTIMEOUT, 20000).
 -define(WAITSTART, 5000).
 
--define(LEASETIMEOUT, 30). % second
+-define(LEASETIMEOUT, 300). % second

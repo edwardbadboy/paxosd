@@ -31,9 +31,12 @@ leaseWait(ID) ->
             SecondsLeft =
                 case Inp of
                     {_, When} ->
-                        erlang:max(?LEASETIMEOUT - (pdUtils:nowUTC() - When), 1);
+                        erlang:max(
+                            erlang:round((?LEASETIMEOUT - (pdUtils:nowUTC() - When)) / 2 *
+                                         random:uniform()),
+                            1);
                     undefined ->
-                        5
+                        erlang:round(?LEASETIMEOUT / 2 * random:uniform())
                 end,
             io:format("Get lease fail, try again in ~ws~n", [SecondsLeft]),
             timer:sleep(SecondsLeft * 1000),
