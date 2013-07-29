@@ -1,3 +1,15 @@
+% Request router is for delivering request to worker process.
+%
+% It is a common situation that a server servs for multiple sessions
+% concurently, and in each session there will be multiple request/reply pairs.
+% For example, a web server can serve many users, each user issue many request.
+%
+% This router receives request from all the clients, and guide the request
+% into the related task (session) queue, then spawn worker process to process
+% the request one by one from the task queue. In this way, the requests for
+% different tasks are processed concurrently, and requests in the same task are
+% processed sequentially.
+
 -module(pdReqRouter).
 -behaviour(gen_server).
 
